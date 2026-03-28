@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cloud Ledger Web App</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            /* --- Light Mode Palette --- */
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --success-hover: #059669;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --warning: #f59e0b;
+            --warning-hover: #d97706;
+            
+            --dark: #1e293b;
+            --text-main: #334155;
+            --text-muted: #64748b;
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --border: #e2e8f0;
+            --table-header: #f8fafc;
+            --input-bg: #ffffff;
+            --pill-bg: #f1f5f9;
+            
+            --radius: 8px;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* --- Dark Mode Palette --- */
+        [data-theme="dark"] {
+            --dark: #f8fafc;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --bg-body: #0f172a;
+            --bg-card: #1e293b;
+            --border: #334155;
+            --table-header: #0f172a;
+            --input-bg: #0f172a;
+            --pill-bg: #334155;
+            
+            --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4);
+        }
+
+        * { box-sizing: border-box; scroll-behavior: smooth; }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-body); color: var(--text-main);
+            margin: 0; padding: 20px; line-height: 1.5;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        h2, h3 { color: var(--dark); margin-top: 0; }
+        .container { max-width: 1100px; margin: auto; }
+
+        /* --- Auth Section --- */
+        #auth-section { 
+            text-align: center; max-width: 400px; margin: 40px auto; 
+            background: var(--bg-card); padding: 40px 25px; 
+            border-radius: var(--radius); box-shadow: var(--shadow-md); 
+        }
+        #auth-section h2 { margin-bottom: 25px; }
+        #auth-section input { margin-bottom: 15px; }
+        .show-password-container { display: flex; align-items: center; justify-content: flex-start; font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        .show-password-container input { width: auto; margin: 0 8px 0 0; min-height: auto; }
+        .auth-buttons { display: flex; gap: 10px; flex-direction: column; }
+        .auth-buttons button { width: 100%; }
+        #forgotPasswordBtn { background: none; border: none; color: var(--primary); text-decoration: underline; cursor: pointer; padding: 10px 0; margin-top: 15px; font-size: 14px; font-weight: 500; }
+
+        /* --- App Header & Menus --- */
+        .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; gap: 10px; }
+        .app-header h2 { margin: 0; font-size: 24px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .icon-btn { background: none; border: none; color: var(--text-main); cursor: pointer; padding: 10px; border-radius: var(--radius); transition: background 0.2s; display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+        .icon-btn:hover { background-color: var(--border); }
+        .dropdown-menu { display: none; position: absolute; right: 0; top: 100%; margin-top: 8px; background-color: var(--bg-card); min-width: 200px; box-shadow: var(--shadow-md); border-radius: var(--radius); border: 1px solid var(--border); z-index: 1000; overflow: hidden; }
+        .dropdown-menu.show { display: block; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .dropdown-item { width: 100%; text-align: left; background: none; color: var(--text-main); padding: 14px 16px; border: none; border-radius: 0; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+        .dropdown-item:hover { background-color: var(--bg-body); }
+        .danger-item { color: var(--danger); }
+        .danger-item:hover { background-color: rgba(239, 68, 68, 0.1); } 
+
+        /* --- NEW: Dashboard Master Grid (Matches Doodle perfectly) --- */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        @media (min-width: 900px) {
+            .dashboard-grid {
+                grid-template-columns: 1.8fr 1fr; /* Left side wider, right side chart */
+                align-items: stretch; /* Stretches chart to perfectly match left column height */
+            }
+        }
+
+        /* --- Left Column (Red & Green Doodle Areas) --- */
+        .dashboard-left {
+            display: flex;
+            flex-direction: column;
+            gap: 20px; /* Space between Cash/Bank and Period cards */
+        }
+
+        .summary { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+        .card { background: var(--bg-card); padding: 20px; border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border); text-align: left; transition: background-color 0.3s ease, border-color 0.3s ease; }
+        .card h3 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;}
+        .card p { margin: 0; font-size: 26px; font-weight: 700; color: var(--dark); word-break: break-all; }
+
+        .sub-summary-container { 
+            background: var(--bg-card); padding: 20px; 
+            border-radius: var(--radius); border: 1px solid var(--border); 
+            box-shadow: var(--shadow-sm); transition: background-color 0.3s ease; 
+            display: flex; flex-direction: column; justify-content: space-between;
+            flex-grow: 1; /* Fills remaining space in left column perfectly */
+        }
+        .sub-summary-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .sub-summary-header label { font-size: 14px; font-weight: 600; color: var(--text-main); width: 100%; }
+        .date-range-inputs { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; align-items: center; }
+        .date-range-inputs input { flex: 1; min-width: 130px; }
+        #clearSummaryDateBtn { padding: 10px 14px; font-size: 14px; background-color: var(--text-muted); color: white; border-radius: 6px; border: none; white-space: nowrap; flex: 1; min-width: 100px; }
+        .sub-summary { display: grid; gap: 15px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+        /* --- Right Column (Yellow Doodle Area: Chart) --- */
+        .chart-container {
+            background: var(--bg-card); padding: 20px; border-radius: var(--radius);
+            box-shadow: var(--shadow-sm); border: 1px solid var(--border);
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            height: 100%; /* Stretches to fill grid cell */
+        }
+        .chart-container h3 { font-size: 14px; font-weight: 600; color: var(--text-main); width: 100%; text-align: left; margin-bottom: 15px; }
+        .canvas-wrapper { position: relative; width: 100%; flex-grow: 1; min-height: 250px; display: flex; align-items: center; justify-content: center;}
+
+        /* --- Forms & Inputs --- */
+        .form-section, .filter-section { 
+            background: var(--bg-card); padding: 25px; 
+            border-radius: var(--radius); box-shadow: var(--shadow-sm); 
+            border: 1px solid var(--border); margin-bottom: 25px; 
+            transition: background-color 0.3s ease; 
+        }
+        
+        .filter-section h3 { font-size: 16px; margin-bottom: 20px; }
+
+        form, .filter-controls { display: grid; grid-template-columns: repeat(12, 1fr); gap: 15px; align-items: end; }
+
+        .input-group { display: flex; flex-direction: column; gap: 8px; grid-column: span 12; }
+        @media (min-width: 600px) { .input-group { grid-column: span 6; } .desc-group { grid-column: span 12; } }
+        @media (min-width: 900px) { .input-group { grid-column: span 3; } .desc-group { grid-column: span 6; } }
+
+        .input-group label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+
+        input, select { 
+            padding: 10px 14px; border: 1px solid var(--border); 
+            border-radius: 6px; box-sizing: border-box; 
+            font-family: inherit; transition: all 0.2s; outline: none; 
+            width: 100%; background-color: var(--input-bg); color: var(--text-main); 
+            min-height: 42px; font-size: 15px; -webkit-appearance: none; 
+        }
+        input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+        
+        button { 
+            background-color: var(--success); color: white; border: none; 
+            cursor: pointer; font-weight: 600; padding: 10px 16px; 
+            border-radius: 6px; transition: all 0.2s; font-size: 15px; 
+            min-height: 42px; 
+        }
+        button:hover { background-color: var(--success-hover); }
+        
+        #submitBtn { grid-column: span 12; padding: 14px; font-size: 16px; margin-top: 10px;}
+        #clearFiltersBtn { grid-column: span 12; background-color: var(--text-muted); height: 42px; }
+        #clearFiltersBtn:hover { background-color: var(--text-main); }
+        @media (min-width: 900px) { #clearFiltersBtn { grid-column: span 3; } }
+
+        /* --- Tables & Category Pills --- */
+        .table-container { background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border); overflow-x: auto; transition: background-color 0.3s ease; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th, td { border-bottom: 1px solid var(--border); padding: 14px 16px; text-align: left; font-size: 14px; }
+        
+        th { background-color: var(--table-header); font-weight: 600; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        th.sortable { cursor: pointer; user-select: none; transition: background-color 0.2s; }
+        th.sortable:hover { background-color: var(--border); color: var(--text-main); }
+        .sort-icon { font-size: 12px; margin-left: 4px; opacity: 0.3; }
+        .sort-icon.active { opacity: 1; color: var(--primary); }
+
+        tbody tr:hover { background-color: var(--table-header); }
+        
+        .category-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background-color: var(--pill-bg); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; font-weight: 600; color: var(--text-main); }
+
+        .negative { color: var(--danger); font-weight: 600; }
+        .positive { color: var(--success); font-weight: 600; }
+        .neutral { color: var(--text-muted); font-weight: 600; } 
+        .action-cell { display: flex; gap: 8px; }
+        .delete-btn { background-color: var(--danger); padding: 8px 12px; font-size: 13px; width: auto; min-height: auto; }
+        .delete-btn:hover { background-color: var(--danger-hover); }
+        .edit-btn { background-color: var(--warning); color: white; padding: 8px 12px; font-size: 13px; width: auto; min-height: auto;}
+        .edit-btn:hover { background-color: var(--warning-hover); }
+
+        /* --- Toast Notifications --- */
+        .toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; }
+        .toast { min-width: 250px; padding: 15px 20px; background-color: var(--bg-card); color: var(--text-main); border-left: 5px solid var(--primary); border-radius: var(--radius); box-shadow: var(--shadow-md); font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; animation: slideIn 0.3s ease forwards, fadeOut 0.3s ease 3.5s forwards; opacity: 0; transform: translateX(120%); }
+        .toast.success { border-left-color: var(--success); }
+        .toast.error { border-left-color: var(--danger); }
+        .toast.warning { border-left-color: var(--warning); }
+        @keyframes slideIn { to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { transform: translateX(120%); opacity: 0; } }
+
+        /* --- Mobile FAB (Floating Action Button) --- */
+        .mobile-fab {
+            display: none; 
+            position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px;
+            border-radius: 50%; background-color: var(--primary); color: white;
+            font-size: 30px; border: none; box-shadow: var(--shadow-md);
+            z-index: 1000; align-items: center; justify-content: center;
+            cursor: pointer; transition: transform 0.2s, background-color 0.2s;
+        }
+        .mobile-fab:active { transform: scale(0.95); }
+
+        /* Mobile Specific Tweaks */
+        @media (max-width: 600px) {
+            body { padding: 10px; padding-bottom: 90px; }
+            .auth-buttons { flex-direction: column; }
+            .sub-summary-header { flex-direction: column; align-items: stretch; }
+            .date-range-inputs { flex-direction: column; }
+            .date-range-inputs span { display: none; } 
+            .app-header h2 { font-size: 20px; }
+            input, select, button, #clearFiltersBtn, #clearSummaryDateBtn { min-height: 48px; font-size: 16px; } 
+
+            .mobile-fab { display: flex; } 
+            .toast-container { right: 10px; left: 10px; bottom: 90px; align-items: center; }
+            .toast { width: 100%; max-width: 400px; transform: translateY(120%); animation: slideUp 0.3s ease forwards, fadeDown 0.3s ease 3.5s forwards; }
+            @keyframes slideUp { to { transform: translateY(0); opacity: 1; } }
+            @keyframes fadeDown { to { transform: translateY(120%); opacity: 0; } }
+        }
+        @media (min-width: 601px) { .auth-buttons { flex-direction: row; } }
+    </style>
+</head>
+<body>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<button id="mobileFab" class="mobile-fab" title="Add New Record">+</button>
+
+<div id="auth-section">
+    <h2>Cloud Ledger</h2>
+    <input type="email" id="email" placeholder="Email Address">
+    <input type="password" id="password" placeholder="Password">
+    
+    <div class="show-password-container">
+        <input type="checkbox" id="showPasswordToggle">
+        <label for="showPasswordToggle">Show Password</label>
+    </div>
+
+    <div class="auth-buttons">
+        <button id="loginBtn" style="background-color: var(--primary);">Login</button>
+        <button id="registerBtn" style="background-color: var(--text-main);">Register</button>
+    </div>
+    
+    <button type="button" id="forgotPasswordBtn">Forgot Password?</button>
+    <p id="authMessage" style="font-size: 14px; margin-top: 15px; min-height: 20px;"></p>
+</div>
+
+<div class="container" id="app-section" style="display: none;">
+    
+    <div class="app-header">
+        <h2>Dashboard</h2>
+        
+        <div class="header-actions">
+            <button id="themeToggleBtn" class="icon-btn" title="Toggle Dark/Light Mode"></button>
+
+            <div class="menu-container">
+                <button id="hamburgerBtn" class="icon-btn" aria-label="Menu">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <div id="dropdownMenu" class="dropdown-menu">
+                    <button id="exportCsvBtn" class="dropdown-item">Export to CSV</button>
+                    <button id="deleteAccountBtn" class="dropdown-item danger-item">Delete Account</button>
+                    <hr style="margin: 0; border: none; border-top: 1px solid var(--border);">
+                    <button id="logoutBtn" class="dropdown-item">Logout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        
+        <div class="dashboard-left">
+            <div class="summary">
+                <div class="card"><h3>Cash</h3><p id="cashBal">0.00</p></div>
+                <div class="card"><h3>Bank</h3><p id="bankBal">0.00</p></div>
+            </div>
+
+            <div class="sub-summary-container">
+                <div class="sub-summary-header">
+                    <label>Income/Expense Period:</label>
+                    <div class="date-range-inputs">
+                        <input type="text" id="summaryStartDateFilter" placeholder="Start Date..." onfocus="(this.type='date')" onblur="(this.value === '' ? this.type='text' : this.type='date')">
+                        <span>-</span>
+                        <input type="text" id="summaryEndDateFilter" placeholder="End Date..." onfocus="(this.type='date')" onblur="(this.value === '' ? this.type='text' : this.type='date')">
+                        <button id="clearSummaryDateBtn">Clear</button>
+                    </div>
+                </div>
+                <div class="sub-summary">
+                    <div class="card mini-card"><h3>Period Income</h3><p id="totalIncomeBal" class="positive">0.00</p></div>
+                    <div class="card mini-card"><h3>Period Expense</h3><p id="totalExpenseBal" class="negative">0.00</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h3>Expenses by Category</h3>
+            <div class="canvas-wrapper">
+                <canvas id="expenseChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="form-section" id="formSectionContainer">
+        <form id="transForm">
+            <div class="input-group">
+                <label>Date</label>
+                <input type="date" id="date" required>
+            </div>
+            
+            <div class="input-group">
+                <label>Category</label>
+                <input list="categoryList" id="category" placeholder="Type or Select" required>
+                <datalist id="categoryList"></datalist>
+            </div>
+
+            <div class="input-group desc-group">
+                <label>Description</label>
+                <input type="text" id="desc" placeholder="What was this for?" required>
+            </div>
+
+            <div class="input-group">
+                <label>Type</label>
+                <select id="type">
+                    <option value="Income">Income</option>
+                    <option value="Expense">Expense</option>
+                    <option value="Transfer">Transfer</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Account</label>
+                <select id="account">
+                    <option value="Cash">Cash</option>
+                    <option value="Bank">Bank</option>
+                </select>
+            </div>
+
+            <div class="input-group" id="toAccountWrapper" style="display: none;">
+                <label>To Account</label>
+                <select id="toAccount">
+                    <option value="" disabled selected>Select...</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Bank">Bank</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Amount</label>
+                <input type="number" id="amount" placeholder="0.00" min="0" step="0.01" required>
+            </div>
+
+            <button type="submit" id="submitBtn">Add Record</button>
+        </form>
+    </div>
+
+    <div class="filter-section">
+        <h3>Filter & Search Records</h3>
+        <div class="filter-controls">
+            <div class="input-group">
+                <label>From Date</label>
+                <input type="text" id="filterStartDate" placeholder="Select Start Date..." onfocus="(this.type='date')" onblur="(this.value === '' ? this.type='text' : this.type='date')">
+            </div>
+            
+            <div class="input-group">
+                <label>To Date</label>
+                <input type="text" id="filterEndDate" placeholder="Select End Date..." onfocus="(this.type='date')" onblur="(this.value === '' ? this.type='text' : this.type='date')">
+            </div>
+            
+            <div class="input-group">
+                <label>Category</label>
+                <select id="filterCategory">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+            
+            <div class="input-group">
+                <label>Record Type</label>
+                <select id="filterType">
+                    <option value="">All Types</option>
+                    <option value="Income">Income</option>
+                    <option value="Expense">Expense</option>
+                    <option value="Transfer">Transfer</option>
+                </select>
+            </div>
+            
+            <div class="input-group">
+                <label>Account</label>
+                <select id="filterAccount">
+                    <option value="">All Accounts</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Bank">Bank</option>
+                </select>
+            </div>
+
+            <div class="input-group desc-group">
+                <label>Description Search</label>
+                <input type="text" id="filterDesc" placeholder="Search Description...">
+            </div>
+            
+            <button type="button" id="clearFiltersBtn">Clear Filters</button>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th class="sortable" data-col="date">Date <span class="sort-icon">↕</span></th>
+                    <th class="sortable" data-col="category">Category <span class="sort-icon">↕</span></th>
+                    <th class="sortable" data-col="desc">Description <span class="sort-icon">↕</span></th>
+                    <th class="sortable" data-col="type">Type <span class="sort-icon">↕</span></th>
+                    <th class="sortable" data-col="account">Account <span class="sort-icon">↕</span></th>
+                    <th class="sortable" data-col="amount">Amount <span class="sort-icon">↕</span></th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="transBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, deleteUser } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCVOz0OdnaE_SkJPkQySGO_96W1-8wk0Ys",
+      authDomain: "ledger-ff14b.firebaseapp.com",
+      projectId: "ledger-ff14b",
+      storageBucket: "ledger-ff14b.firebasestorage.app",
+      messagingSenderId: "13937141988",
+      appId: "1:13937141988:web:be2e3cfe9ed75e1565a4f1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUserId = null;
+    let transactions = [];
+    let currentFilteredTransactions = []; 
+    let editDocId = null;
+    let expenseChartInstance = null; 
+
+    // --- SORTING STATE ---
+    let currentSort = { column: 'date', direction: 'desc' };
+
+    // --- CURRENCY FORMATTER ---
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR'
+        }).format(amount);
+    };
+
+    // --- TOAST NOTIFICATION LOGIC ---
+    window.showToast = function(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        let icon = '✅';
+        if (type === 'error') icon = '❌';
+        if (type === 'warning') icon = '⚠️';
+        
+        toast.innerHTML = `<span>${icon} &nbsp; ${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => { toast.remove(); }, 4000);
+    }
+
+    // --- MOBILE FAB LOGIC ---
+    document.getElementById('mobileFab').addEventListener('click', () => {
+        document.getElementById('formSectionContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // --- CATEGORY EMOJI MAPPER ---
+    const categoryEmojis = {
+        'Food': '🍔', 'Dining': '🍽️', 'Groceries': '🛒', 'Transport': '🚗', 'Fuel': '⛽',
+        'Rent': '🏠', 'Utilities': '💡', 'Internet': '🌐', 'Phone': '📱',
+        'Entertainment': '🍿', 'Shopping': '🛍️', 'Salary': '💰', 'Business': '💼',
+        'Health': '💊', 'Travel': '✈️', 'Education': '🎓', 'Gifts': '🎁', 'Investments': '📈'
+    };
+
+    function getCategoryPill(category) {
+        if (!category || category === '-') return '-';
+        let emoji = '🏷️'; 
+        for (const [key, val] of Object.entries(categoryEmojis)) {
+            if (category.toLowerCase().includes(key.toLowerCase())) {
+                emoji = val; break;
+            }
+        }
+        return `<span class="category-pill">${emoji} ${category}</span>`;
+    }
+
+    // --- LIGHT / DARK MODE LOGIC ---
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const htmlElement = document.documentElement;
+    
+    const sunIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+    const moonIcon = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        htmlElement.setAttribute('data-theme', 'dark');
+        themeToggleBtn.innerHTML = sunIcon;
+    } else {
+        themeToggleBtn.innerHTML = moonIcon;
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+        if (htmlElement.getAttribute('data-theme') === 'dark') {
+            htmlElement.removeAttribute('data-theme');
+            localStorage.setItem('theme', 'light');
+            themeToggleBtn.innerHTML = moonIcon;
+        } else {
+            htmlElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+            themeToggleBtn.innerHTML = sunIcon;
+        }
+        if(currentUserId) renderTable(); 
+    });
+
+    // --- HAMBURGER MENU LOGIC ---
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    const dropdownMenu = document.getElementById('dropdownMenu');
+
+    hamburgerBtn.addEventListener('click', (e) => {
+        dropdownMenu.classList.toggle('show');
+        e.stopPropagation(); 
+    });
+    document.addEventListener('click', (e) => {
+        if (!dropdownMenu.contains(e.target) && !hamburgerBtn.contains(e.target)) {
+            dropdownMenu.classList.remove('show');
+        }
+    });
+    dropdownMenu.addEventListener('click', () => { dropdownMenu.classList.remove('show'); });
+
+    // --- FORM LOGIC ---
+    function toggleFields() {
+        const typeVal = document.getElementById('type').value;
+        const toAccWrapper = document.getElementById('toAccountWrapper');
+        const toAccSelect = document.getElementById('toAccount');
+
+        if (typeVal === 'Transfer') {
+            toAccWrapper.style.display = 'flex'; toAccSelect.required = true;
+        } else {
+            toAccWrapper.style.display = 'none'; toAccSelect.required = false;
+        }
+    }
+    document.getElementById('type').addEventListener('change', toggleFields);
+
+    function setCurrentDate() {
+        const today = new Date();
+        document.getElementById('date').value = today.toISOString().split('T')[0];
+    }
+
+    // --- AUTHENTICATION LOGIC ---
+    const authSection = document.getElementById('auth-section');
+    const appSection = document.getElementById('app-section');
+    const authMessage = document.getElementById('authMessage');
+
+    document.getElementById('showPasswordToggle').addEventListener('change', function() {
+        document.getElementById('password').type = this.checked ? 'text' : 'password'; 
+    });
+
+    document.getElementById('forgotPasswordBtn').addEventListener('click', async () => {
+        const emailVal = document.getElementById('email').value;
+        if (!emailVal) {
+            authMessage.style.color = 'var(--danger)';
+            authMessage.innerText = "Please type your email address first to reset your password.";
+            return;
+        }
+        try {
+            await sendPasswordResetEmail(auth, emailVal);
+            showToast("Password reset email sent! Check your inbox.", "success");
+            authMessage.innerText = "";
+        } catch (error) { 
+            authMessage.style.color = 'var(--danger)'; authMessage.innerText = error.message; 
+        }
+    });
+
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+        try {
+            await createUserWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value);
+            showToast("Registration successful!", "success");
+        } catch (error) { authMessage.style.color = 'var(--danger)'; authMessage.innerText = error.message; }
+    });
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+        try {
+            await signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value);
+            showToast("Logged in successfully", "success");
+        } catch (error) { authMessage.style.color = 'var(--danger)'; authMessage.innerText = "Invalid Email or Password"; }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        signOut(auth);
+        showToast("Logged out safely", "success");
+    });
+
+    document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+        const confirmDelete = confirm("⚠️ WARNING: Are you sure you want to completely delete your account?\n\nThis will permanently erase ALL your transactions from the database. This action CANNOT be undone.");
+        if (confirmDelete) {
+            try {
+                for (const t of transactions) { await deleteDoc(doc(db, "transactions", t.id)); }
+                await deleteUser(user);
+                showToast("Account and data permanently deleted.", "success");
+            } catch (error) {
+                if (error.code === 'auth/requires-recent-login') { 
+                    showToast("Security requirement: Please Log Out and Log Back In before deleting your account.", "warning"); 
+                } else { showToast("Error deleting account.", "error"); }
+            }
+        }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUserId = user.uid;
+            authSection.style.display = 'none';
+            appSection.style.display = 'block';
+            setCurrentDate();
+            loadDataFromCloud(); 
+        } else {
+            currentUserId = null;
+            authSection.style.display = 'block';
+            appSection.style.display = 'none';
+            authMessage.innerText = '';
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+        }
+    });
+
+    // --- APP LOGIC ---
+    function updateCategoryDropdowns() {
+        const uniqueCategories = [...new Set(transactions.map(t => t.category))].filter(Boolean).sort();
+        
+        const dataList = document.getElementById('categoryList');
+        dataList.innerHTML = '';
+        uniqueCategories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            dataList.appendChild(option);
+        });
+
+        const filterCat = document.getElementById('filterCategory');
+        const currentSelection = filterCat.value;
+        filterCat.innerHTML = '<option value="">All Categories</option>';
+        uniqueCategories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat; option.innerText = cat;
+            if (cat === currentSelection) option.selected = true;
+            filterCat.appendChild(option);
+        });
+    }
+
+    document.getElementById('summaryStartDateFilter').addEventListener('input', renderTable);
+    document.getElementById('summaryEndDateFilter').addEventListener('input', renderTable);
+    
+    document.getElementById('clearSummaryDateBtn').addEventListener('click', () => {
+        const startInput = document.getElementById('summaryStartDateFilter');
+        startInput.value = ''; startInput.type = 'text'; 
+        const endInput = document.getElementById('summaryEndDateFilter');
+        endInput.value = ''; endInput.type = 'text'; 
+        renderTable();
+    });
+
+    document.getElementById('filterStartDate').addEventListener('input', renderTable);
+    document.getElementById('filterEndDate').addEventListener('input', renderTable);
+    document.getElementById('filterCategory').addEventListener('change', renderTable);
+    document.getElementById('filterDesc').addEventListener('input', renderTable);
+    document.getElementById('filterType').addEventListener('change', renderTable);
+    document.getElementById('filterAccount').addEventListener('change', renderTable);
+    
+    document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+        document.getElementById('filterStartDate').value = ''; document.getElementById('filterStartDate').type = 'text';
+        document.getElementById('filterEndDate').value = ''; document.getElementById('filterEndDate').type = 'text';
+        document.getElementById('filterCategory').value = '';
+        document.getElementById('filterDesc').value = '';
+        document.getElementById('filterType').value = '';
+        document.getElementById('filterAccount').value = '';
+        renderTable();
+        showToast("Filters Cleared", "info");
+    });
+
+    // --- TABLE SORTING LISTENER ---
+    document.querySelectorAll('th.sortable').forEach(header => {
+        header.addEventListener('click', () => {
+            const col = header.getAttribute('data-col');
+            if (currentSort.column === col) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = col;
+                currentSort.direction = 'asc';
+            }
+            
+            document.querySelectorAll('.sort-icon').forEach(icon => {
+                icon.innerHTML = '↕';
+                icon.classList.remove('active');
+            });
+            const activeIcon = header.querySelector('.sort-icon');
+            activeIcon.innerHTML = currentSort.direction === 'asc' ? '⬆' : '⬇';
+            activeIcon.classList.add('active');
+
+            renderTable();
+        });
+    });
+
+    function loadDataFromCloud() {
+        const q = query(collection(db, "transactions"), where("userId", "==", currentUserId));
+        onSnapshot(q, (snapshot) => {
+            transactions = [];
+            snapshot.forEach((doc) => {
+                transactions.push({ id: doc.id, ...doc.data() });
+            });
+            updateCategoryDropdowns();
+            renderTable(); 
+        });
+    }
+
+    function renderTable() {
+        let cash = 0, bank = 0;
+        let totalIncome = 0, totalExpense = 0; 
+        const summaryStartDate = document.getElementById('summaryStartDateFilter').value;
+        const summaryEndDate = document.getElementById('summaryEndDateFilter').value;
+
+        transactions.forEach((t) => {
+            let amt = Math.abs(t.amount);
+            const matchSummaryDate = (!summaryStartDate || t.date >= summaryStartDate) && (!summaryEndDate || t.date <= summaryEndDate);
+            
+            if (matchSummaryDate) {
+                if (t.type === 'Income') { totalIncome += amt; } else if (t.type === 'Expense') { totalExpense += amt; }
+            }
+
+            if (t.type === 'Transfer') {
+                if(t.account === 'Cash') cash -= amt; if(t.account === 'Bank') bank -= amt;
+                if(t.toAccount === 'Cash') cash += amt; if(t.toAccount === 'Bank') bank += amt;
+            } else {
+                let sAmt = t.amount;
+                if(t.account === 'Cash') cash += sAmt; if(t.account === 'Bank') bank += sAmt;
+            }
+        });
+        
+        document.getElementById('cashBal').innerText = formatCurrency(cash);
+        document.getElementById('bankBal').innerText = formatCurrency(bank);
+        document.getElementById('totalIncomeBal').innerText = formatCurrency(totalIncome);
+        document.getElementById('totalExpenseBal').innerText = formatCurrency(totalExpense);
+
+        const fStartDate = document.getElementById('filterStartDate').value;
+        const fEndDate = document.getElementById('filterEndDate').value;
+        const fCat = document.getElementById('filterCategory').value;
+        const fDesc = document.getElementById('filterDesc').value.toLowerCase();
+        const fType = document.getElementById('filterType').value;
+        const fAcc = document.getElementById('filterAccount').value;
+
+        currentFilteredTransactions = transactions.filter(t => {
+            const matchDate = (!fStartDate || t.date >= fStartDate) && (!fEndDate || t.date <= fEndDate);
+            const matchCat = fCat ? t.category === fCat : true;
+            const matchDesc = fDesc ? t.desc.toLowerCase().includes(fDesc) : true;
+            const matchType = fType ? t.type === fType : true;
+            const matchAcc = fAcc ? (t.account === fAcc || t.toAccount === fAcc) : true;
+            return matchDate && matchCat && matchDesc && matchType && matchAcc;
+        });
+
+        // APPLY SORTING
+        currentFilteredTransactions.sort((a, b) => {
+            let valA = a[currentSort.column];
+            let valB = b[currentSort.column];
+
+            if (currentSort.column === 'amount') {
+                valA = Math.abs(valA);
+                valB = Math.abs(valB);
+            } else {
+                valA = (valA || '').toString().toLowerCase();
+                valB = (valB || '').toString().toLowerCase();
+            }
+
+            if (valA < valB) return currentSort.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return currentSort.direction === 'asc' ? 1 : -1;
+            
+            if (currentSort.column !== 'date') {
+                 return new Date(b.date) - new Date(a.date);
+            }
+            return 0;
+        });
+
+        updateChart(currentFilteredTransactions);
+
+        const tbody = document.getElementById('transBody');
+        tbody.innerHTML = '';
+
+        if(currentFilteredTransactions.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No transactions found.</td></tr>`;
+            return;
+        }
+
+        currentFilteredTransactions.forEach((t) => {
+            const row = tbody.insertRow();
+            let isTransfer = t.type === 'Transfer';
+            let colorClass = isTransfer ? 'neutral' : (t.amount < 0 ? 'negative' : 'positive');
+            let accDisplay = isTransfer ? `${t.account} &rarr; ${t.toAccount}` : t.account;
+            
+            let displayCategory = getCategoryPill(t.category);
+            let formattedAmount = formatCurrency(Math.abs(t.amount));
+
+            row.innerHTML = `
+                <td>${t.date}</td><td>${displayCategory}</td><td>${t.desc}</td>
+                <td><span class="${colorClass}">${t.type}</span></td>
+                <td>${accDisplay}</td>
+                <td class="${colorClass}">${formattedAmount}</td>
+                <td class="action-cell">
+                    <button type="button" class="edit-btn" onclick="window.editItem('${t.id}')">Edit</button>
+                    <button type="button" class="delete-btn" onclick="window.deleteItem('${t.id}')">Delete</button>
+                </td>
+            `;
+        });
+    }
+
+    // --- CHART.JS LOGIC ---
+    function updateChart(filteredData) {
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim();
+        
+        const expensesByCategory = {};
+        filteredData.forEach(t => {
+            if (t.type === 'Expense') {
+                const cat = t.category || 'Uncategorized';
+                expensesByCategory[cat] = (expensesByCategory[cat] || 0) + Math.abs(t.amount);
+            }
+        });
+
+        const labels = Object.keys(expensesByCategory);
+        const data = Object.values(expensesByCategory);
+        const colors = ['#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+        if (expenseChartInstance) { expenseChartInstance.destroy(); }
+
+        if (data.length === 0) {
+            expenseChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: ['No Expenses'], datasets: [{ data: [1], backgroundColor: ['#e2e8f0'], borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { tooltip: { enabled: false }, legend: { display: false } } }
+            });
+            return;
+        }
+
+        expenseChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '65%',
+                plugins: {
+                    legend: { position: 'right', labels: { color: textColor, font: { family: 'Inter', size: 12 } } },
+                    tooltip: { callbacks: { label: function(context) { return formatCurrency(context.parsed); } } }
+                }
+            }
+        });
+    }
+
+    document.getElementById('transForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        let typeChoice = document.getElementById('type').value;
+        let rawAmount = Math.abs(parseFloat(document.getElementById('amount').value));
+        let finalAmount = typeChoice === 'Expense' ? -rawAmount : rawAmount;
+
+        const transData = {
+            userId: currentUserId, 
+            date: document.getElementById('date').value,
+            category: document.getElementById('category').value, 
+            desc: document.getElementById('desc').value,
+            type: typeChoice,
+            account: document.getElementById('account').value,
+            toAccount: typeChoice === 'Transfer' ? document.getElementById('toAccount').value : '',
+            amount: finalAmount
+        };
+
+        if (editDocId) {
+            await updateDoc(doc(db, "transactions", editDocId), transData);
+            editDocId = null;
+            document.getElementById('submitBtn').innerText = 'Add Record';
+            showToast("Record Updated", "success");
+        } else {
+            transData.timestamp = Date.now(); 
+            await addDoc(collection(db, "transactions"), transData);
+            showToast("Record Added", "success");
+        }
+        
+        document.getElementById('transForm').reset();
+        document.getElementById('type').value = 'Income';
+        toggleFields();
+        setCurrentDate();
+    });
+
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+        if (currentFilteredTransactions.length === 0) {
+            showToast("No transactions available to export based on filters!", "warning");
+            return;
+        }
+
+        let csvContent = "Date,Category,Description,Type,Account,To Account,Amount\n";
+        currentFilteredTransactions.forEach(t => {
+            let cleanCat = `"${(t.category || '').replace(/"/g, '""')}"`;
+            let cleanDesc = `"${(t.desc || '').replace(/"/g, '""')}"`;
+            let toAcc = t.toAccount || '';
+            let displayAmount = Math.abs(t.amount).toFixed(2);
+            let row = `${t.date},${cleanCat},${cleanDesc},${t.type},${t.account},${toAcc},${displayAmount}`;
+            csvContent += row + "\n";
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "Ledger_Filtered_Export.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("CSV Exported", "success");
+    });
+
+    window.deleteItem = async (id) => {
+        await deleteDoc(doc(db, "transactions", id));
+        showToast("Record Deleted", "success");
+    };
+
+    window.editItem = (id) => {
+        const t = transactions.find(trans => trans.id === id);
+        document.getElementById('date').value = t.date;
+        document.getElementById('category').value = t.category || ''; 
+        document.getElementById('desc').value = t.desc;
+        document.getElementById('type').value = t.type;
+        document.getElementById('account').value = t.account;
+        
+        toggleFields(); 
+        document.getElementById('toAccount').value = t.toAccount || '';
+        document.getElementById('amount').value = Math.abs(t.amount);
+        
+        document.getElementById('submitBtn').innerText = 'Update Record';
+        editDocId = id;
+        document.getElementById('formSectionContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    // --- PWA SERVICE WORKER REGISTRATION ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .catch(err => console.log('ServiceWorker registration failed: ', err));
+      });
+    }
+</script>
+
+</body>
+</html>

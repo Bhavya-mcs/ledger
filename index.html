@@ -181,6 +181,7 @@
             min-height: 42px; 
         }
         button:hover { background-color: var(--success-hover); }
+        button:disabled { opacity: 0.7; cursor: not-allowed; }
         
         #submitBtn { grid-column: span 12; padding: 14px; font-size: 16px; margin-top: 10px;}
         #clearFiltersBtn { grid-column: span 12; background-color: var(--text-muted); height: 42px; }
@@ -456,27 +457,53 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, deleteUser } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, deleteUser, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, query, onSnapshot, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyCVOz0OdnaE_SkJPkQySGO_96W1-8wk0Ys",
-      authDomain: "ledger-ff14b.firebaseapp.com",
-      projectId: "ledger-ff14b",
-      storageBucket: "ledger-ff14b.firebasestorage.app",
-      messagingSenderId: "13937141988",
-      appId: "1:13937141988:web:be2e3cfe9ed75e1565a4f1"
-    };
+    // Initialize Firebase correctly for the Canvas Environment
+    let firebaseConfig;
+    if (typeof __firebase_config !== 'undefined') {
+        firebaseConfig = JSON.parse(__firebase_config);
+    } else {
+        // Fallback to local config if environment config is missing
+        firebaseConfig = {
+          apiKey: "AIzaSyCVOz0OdnaE_SkJPkQySGO_96W1-8wk0Ys",
+          authDomain: "ledger-ff14b.firebaseapp.com",
+          projectId: "ledger-ff14b",
+          storageBucket: "ledger-ff14b.firebasestorage.app",
+          messagingSenderId: "13937141988",
+          appId: "1:13937141988:web:be2e3cfe9ed75e1565a4f1"
+        };
+    }
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     let currentUserId = null;
     let transactions = [];
     let currentFilteredTransactions = []; 
     let editDocId = null;
     let expenseChartInstance = null; 
+
+    // Helper functions for Mandatory Strict Paths
+    const getCollectionPath = () => collection(db, 'artifacts', appId, 'users', currentUserId, 'transactions');
+    const getDocPath = (id) => doc(db, 'artifacts', appId, 'users', currentUserId, 'transactions', id);
+
+    // Canvas Environment Automatic Authentication
+    const initAuth = async () => {
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else if (typeof __firebase_config !== 'undefined') {
+                await signInAnonymously(auth);
+            }
+        } catch (error) {
+            console.error("Auth init error:", error);
+        }
+    };
+    initAuth();
 
     // --- SORTING STATE ---
     let currentSort = { column: 'date', direction: 'desc' };
@@ -640,7 +667,7 @@
         const confirmDelete = confirm("⚠️ WARNING: Are you sure you want to completely delete your account?\n\nThis will permanently erase ALL your transactions from the database. This action CANNOT be undone.");
         if (confirmDelete) {
             try {
-                for (const t of transactions) { await deleteDoc(doc(db, "transactions", t.id)); }
+                for (const t of transactions) { await deleteDoc(getDocPath(t.id)); }
                 await deleteUser(user);
                 showToast("Account and data permanently deleted.", "success");
             } catch (error) {
@@ -744,7 +771,9 @@
     });
 
     function loadDataFromCloud() {
-        const q = query(collection(db, "transactions"), where("userId", "==", currentUserId));
+        if (!currentUserId) return;
+
+        const q = query(getCollectionPath());
         onSnapshot(q, (snapshot) => {
             transactions = [];
             snapshot.forEach((doc) => {
@@ -752,6 +781,9 @@
             });
             updateCategoryDropdowns();
             renderTable(); 
+        }, (error) => {
+            console.error("Error fetching data: ", error);
+            showToast("Could not load your records: " + error.message, "error");
         });
     }
 
@@ -894,39 +926,53 @@
         });
     }
 
+    // ADDED PROPER ERROR HANDLING HERE
     document.getElementById('transForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        let typeChoice = document.getElementById('type').value;
-        let rawAmount = Math.abs(parseFloat(document.getElementById('amount').value));
-        let finalAmount = typeChoice === 'Expense' ? -rawAmount : rawAmount;
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Saving...';
 
-        const transData = {
-            userId: currentUserId, 
-            date: document.getElementById('date').value,
-            category: document.getElementById('category').value, 
-            desc: document.getElementById('desc').value,
-            type: typeChoice,
-            account: document.getElementById('account').value,
-            toAccount: typeChoice === 'Transfer' ? document.getElementById('toAccount').value : '',
-            amount: finalAmount
-        };
+        try {
+            if (!currentUserId) throw new Error("You must be logged in to save a record.");
 
-        if (editDocId) {
-            await updateDoc(doc(db, "transactions", editDocId), transData);
-            editDocId = null;
-            document.getElementById('submitBtn').innerText = 'Add Record';
-            showToast("Record Updated", "success");
-        } else {
-            transData.timestamp = Date.now(); 
-            await addDoc(collection(db, "transactions"), transData);
-            showToast("Record Added", "success");
+            let typeChoice = document.getElementById('type').value;
+            let rawAmount = Math.abs(parseFloat(document.getElementById('amount').value));
+            let finalAmount = typeChoice === 'Expense' ? -rawAmount : rawAmount;
+
+            const transData = {
+                userId: currentUserId, 
+                date: document.getElementById('date').value,
+                category: document.getElementById('category').value, 
+                desc: document.getElementById('desc').value,
+                type: typeChoice,
+                account: document.getElementById('account').value,
+                toAccount: typeChoice === 'Transfer' ? document.getElementById('toAccount').value : '',
+                amount: finalAmount
+            };
+
+            if (editDocId) {
+                await updateDoc(getDocPath(editDocId), transData);
+                editDocId = null;
+                showToast("Record Updated", "success");
+            } else {
+                transData.timestamp = Date.now(); 
+                await addDoc(getCollectionPath(), transData);
+                showToast("Record Added", "success");
+            }
+            
+            document.getElementById('transForm').reset();
+            document.getElementById('type').value = 'Income';
+            toggleFields();
+            setCurrentDate();
+        } catch (error) {
+            console.error("Firebase Error: ", error);
+            showToast("Failed to save: " + (error.message || "Unknown error"), "error");
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = editDocId ? 'Update Record' : 'Add Record';
         }
-        
-        document.getElementById('transForm').reset();
-        document.getElementById('type').value = 'Income';
-        toggleFields();
-        setCurrentDate();
     });
 
     document.getElementById('exportCsvBtn').addEventListener('click', () => {
@@ -957,8 +1003,13 @@
     });
 
     window.deleteItem = async (id) => {
-        await deleteDoc(doc(db, "transactions", id));
-        showToast("Record Deleted", "success");
+        try {
+            await deleteDoc(getDocPath(id));
+            showToast("Record Deleted", "success");
+        } catch (error) {
+            console.error("Error deleting: ", error);
+            showToast("Failed to delete record.", "error");
+        }
     };
 
     window.editItem = (id) => {
